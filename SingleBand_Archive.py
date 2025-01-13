@@ -21,23 +21,23 @@ class UBBPlotter:
         self.tmjd = imjd + (smjd / 86_400.) + (soffs / 86_400.)
         #self.toa = (self.burst_mjd - self.tmjd) * 86400
         self.delay_seconds = 4.1487416 * 10**6 * ((1 / self.cfreq**2) - (1 / self.topfreq**2)) / 1000 * dm
-        self.toa = ((burst_mjd + self.delay_seconds/86400) - self.tmjd)*86400 - 0.025
+        self.toa = ((burst_mjd + self.delay_seconds/86400) - self.tmjd)*86400 - 0.5
         self.cepoch = self.tmjd + self.toa/86400
         print(f"Time of Arrival (TOA): {self.toa}")
 
 
 
     def run_dspsr_command(self, dm, bins, output_filename):
-    # Construct the dspsr command
+        # Construct the dspsr command
         command1 = [
             'dspsr',
             '-S', str(self.toa),
-            '-T', '0.05',
-            '-c', '0.05',
+            '-T', '1.0',
+            '-c', '1.0',
             '--scloffs',
             '-b', str(bins),
             '-D', str(dm),
-            '-cepoch',str(self.cepoch),
+            '-cepoch', str(self.cepoch),
             '-O', output_filename,
             self.fname
         ]
@@ -57,10 +57,25 @@ class UBBPlotter:
             print(f"Error: dspsr did not create the expected .ar file: {output_ar_file}")
             return None
 
-    # Construct and run the pac command
-        #output_calib_file = f"{output_filename}.calibP"
-        command2 = ['pac', '-d', self.fluxcal, output_ar_file]
+        # Construct and run the paz command
+        paz_command = ['paz', '-L', '-m', output_ar_file]
+        print(f"Running paz with command: {' '.join(paz_command)}")
+        result_paz = subprocess.run(paz_command, capture_output=True, text=True)
 
+        if result_paz.returncode != 0:
+            print("paz command failed:")
+            print(result_paz.stderr)
+            return None
+
+        print("paz command executed successfully.")
+        paz_output_ar_file = output_ar_file  # Overwrite with the same file after paz modifies it
+
+        if not os.path.exists(paz_output_ar_file):
+            print(f"Error: paz did not modify the expected .ar file: {paz_output_ar_file}")
+            return None
+
+        # Construct and run the pac command
+        command2 = ['pac', '-d', self.fluxcal, paz_output_ar_file]
         print(f"Running pac with command: {' '.join(command2)}")
         result2 = subprocess.run(command2, capture_output=True, text=True)
 
@@ -69,12 +84,8 @@ class UBBPlotter:
             print(result2.stderr)
             return None
 
-        #if not os.path.exists(output_calib_file):
-            #print(f"Error: pac did not create the expected calibrated file: {output_calib_file}")
-            #return None
-
         #print("pac command executed successfully.")
-        #return output_calib_file
+        #return paz_output_ar_file
 
 
 
@@ -102,4 +113,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
