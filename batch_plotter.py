@@ -136,23 +136,32 @@ def load_psrchive(fname, nchan, dm):
 
     return waterfall, f_channels, t_res, weights
 
+
 def process_files(files, nchan, dm, output_prefix):
     results_summary = []
     gaussian_mjd_list = []  # Store the MJD for each Gaussian component for each burst
 
     pdf_pages = PdfPages(f"{output_prefix}_plots.pdf")
+    error_log = open(f"{output_prefix}_error.log", "w")  # Open a log file to record skipped files
 
     for filename in files:
-        burst_code = filename.split('_')[-1].split('.')[0]
+        burst_code = filename.split('_')[-1].split('.')[0]  # Extract burst code
 
         # Extract MJD from the header (this is calculated per file)
         header_cmd = ["header", filename]
         mjd_value = extract_mjd_from_header(header_cmd)
         if mjd_value is None:
             print(f"MJD value could not be extracted for {filename}.")
+            error_log.write(f"{filename}: MJD extraction failed\n")  # Log the skipped file
             continue
 
-        waterfall, f_channels, t_res, weights = load_psrchive(filename, nchan, dm)
+        try:
+            waterfall, f_channels, t_res, weights = load_psrchive(filename, nchan, dm)
+        except Exception as e:
+            print(f"Error loading data for {filename}: {e}")
+            error_log.write(f"{filename}: Data loading failed - {e}\n")  # Log the skipped file
+            continue
+
         mask = np.count_nonzero(weights == 0)
         block_size = (1, 1)
         waterfall_reduced = block_reduce(waterfall, block_size=block_size, func=np.mean)
@@ -162,9 +171,23 @@ def process_files(files, nchan, dm, output_prefix):
         time_series = np.average(waterfall_reduced[~np.isnan(waterfall_reduced[:, 0])], axis=0)
         time = np.arange(waterfall_reduced.shape[1])
 
-        results = iterative_gaussian_fitting(time_series, time, sn_threshold=np.std(time_series[0:50] * 3))
-        leftmost_intercept = int(results["leftmost_intercept"])
-        rightmost_intercept = int(results["rightmost_intercept"])
+        try:
+            results = iterative_gaussian_fitting(time_series, time, sn_threshold=np.std(time_series[0:50] * 3))
+        except Exception as e:
+            print(f"Error fitting Gaussian model for {filename}: {e}")
+            error_log.write(f"{filename}: Gaussian fitting failed - {e}\n")  # Log the skipped file
+            continue
+
+        # Attempt to extract intercepts and handle errors gracefully
+        try:
+            leftmost_intercept = int(results["leftmost_intercept"])
+            rightmost_intercept = int(results["rightmost_intercept"])
+        except (TypeError, ValueError) as e:
+            print(f"Warning: Unable to extract valid intercepts for {filename}. Skipping intercept-based calculations.")
+            leftmost_intercept = None
+            rightmost_intercept = None
+            error_log.write(f"{filename}: Intercept extraction failed - {e}\n")  # Log the skipped file
+            continue
 
         # Store MJD of Gaussian component peaks for each burst
         gaussian_mjds_for_burst = []
@@ -181,46 +204,70 @@ def process_files(files, nchan, dm, output_prefix):
         BW = 650 * 1e6 - (mask * 1e6)
         l = 1.882e27
         z = 0.13
-        fluence = (np.sum(time_series[leftmost_intercept:rightmost_intercept]) * t_res_reduced) / 1000
+        # Check if intercepts are available before calculating fluence
+        if leftmost_intercept is not None and rightmost_intercept is not None:
+            fluence = (np.sum(time_series[leftmost_intercept:rightmost_intercept]) * t_res_reduced) / 1000
+        else:
+            fluence = np.nan
         fluence_uncertainty = fluence * 0.1  # 10% uncertainty as an example
-        energy = (fluence * BW * 10e-23 * 4 * np.pi * l ** 2) / (1 + z)
-        energy_uncertainty = (fluence_uncertainty * BW * 10e-23 * 4 * np.pi * l ** 2) / (1 + z)
+        energy = (fluence * BW * 10e-23 * 4 * np.pi * l ** 2) / (1 + z) if not np.isnan(fluence) else np.nan
+        energy_uncertainty = (fluence_uncertainty * BW * 10e-23 * 4 * np.pi * l ** 2) / (1 + z) if not np.isnan(fluence_uncertainty) else np.nan
 
-        # Save burst parameters
-        burst_width = results['overall_width'] * t_res_reduced * 1e3
-        burst_width_uncertainty = burst_width * 0.1  # 10% uncertainty as an example
+        # Save burst parameters, check for 'overall_width' before using it
+        try:
+            burst_width = results['overall_width'] * t_res_reduced * 1e3 if results.get('overall_width') is not None else np.nan
+        except TypeError:
+            burst_width = np.nan  # Handle the case where 'overall_width' is None
+        burst_width_uncertainty = burst_width * 0.1 if not np.isnan(burst_width) else np.nan
         burst_mjd_val = mjd_value + (0.5 / 86400)
-        peak_flux = np.max(multi_gaussian(time, *results["fitted_params"]))
+        peak_flux = np.max(multi_gaussian(time, *results["fitted_params"])) if results["fitted_params"] else np.nan
 
-        results_summary.append([burst_mjd_val, peak_flux, burst_width, burst_width_uncertainty, energy, energy_uncertainty, burst_code])
+        # Append results for saving
+        results_summary.append([burst_mjd_val, peak_flux, burst_width, burst_width_uncertainty, energy, energy_uncertainty,burst_code])
 
         # Save the dynamic spectrum
         np.savez(f"{output_prefix}_{burst_code}.npz", dynamic_spectrum=waterfall_reduced, f_channels=f_channels_reduced, t_res=t_res_reduced)
 
+        # Define the zoom window around the center of the time axis
+        zoom_width = 200  # Define how many samples to zoom around the center (fixed range)
+        center_time_index = len(time) // 2  # Find the center of the time axis
+        zoom_start = max(0, center_time_index - zoom_width)
+        zoom_end = min(len(time), center_time_index + zoom_width)
+
         # Generate and save the plot
         fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(9, 7), gridspec_kw={'height_ratios': [1, 3]})
-        ax1.plot(time, time_series, color='black', label='Time Series')
+
+        # Time series plot (zoomed in)
+        ax1.plot(time[zoom_start:zoom_end], time_series[zoom_start:zoom_end], color='black', label='Time Series')
 
         if results["fitted_params"]:
-            ax1.plot(time, multi_gaussian(time, *results["fitted_params"]), color='red', label='Gaussian Fit')
-            if results["leftmost_intercept"] and results["rightmost_intercept"]:
-                ax1.axvline(results["leftmost_intercept"], color='red', linestyle='dotted')
-                ax1.axvline(results["rightmost_intercept"], color='red', linestyle='dotted')
+            ax1.plot(time[zoom_start:zoom_end], multi_gaussian(time[zoom_start:zoom_end], *results["fitted_params"]), color='red', label='Gaussian Fit')
+            if leftmost_intercept is not None and rightmost_intercept is not None:
+                ax1.axvline(leftmost_intercept, color='red', linestyle='dotted')
+                ax1.axvline(rightmost_intercept, color='red', linestyle='dotted')
 
         ax1.set_ylabel('Flux (mJy)')
         ax1.legend(loc='upper right')
 
-        im = ax2.imshow(waterfall_reduced, aspect='auto', cmap='plasma', origin='lower',
-                        extent=[time[0], time[-1], f_channels_reduced.min(), f_channels_reduced.max()],
+        # Dynamic spectrum plot (zoomed in)
+        im = ax2.imshow(waterfall_reduced[:, zoom_start:zoom_end], aspect='auto', cmap='plasma', origin='lower',
+                        extent=[time[zoom_start], time[zoom_end], f_channels_reduced.min(), f_channels_reduced.max()],
                         vmin=np.nanpercentile(waterfall_reduced, 5), vmax=np.nanpercentile(waterfall_reduced, 95))
-        ax2.set_xlabel('Time (s)')
+        ax2.set_xlabel('Time (samples)')
         ax2.set_ylabel('Frequency (MHz)')
+
+        # Set the title with the .npz filename
+        npz_filename = f"{output_prefix}_{burst_code}.npz"
+        fig.suptitle(npz_filename, fontsize=14)
+
         plt.tight_layout()
 
+        # Save the plot to the PDF
         pdf_pages.savefig(fig)
         plt.close(fig)
 
     pdf_pages.close()
+    error_log.close()  # Close the error log file when done
 
     # After processing all files, pad and save Gaussian MJDs
     # Calculate the maximum number of components across all bursts
@@ -238,6 +285,9 @@ def process_files(files, nchan, dm, output_prefix):
     # Save to text file
     np.savetxt(f"{output_prefix}_gaussian_mjds.txt", gaussian_mjd_array, fmt='%.8f', delimiter='\t')
 
+    # Save burst properties to a text file (with NaNs where calculations failed)
+    burst_properties = np.array(results_summary, dtype=float)  # Ensure all elements are numeric (float)
+    np.savetxt(f"{output_prefix}_burst_properties.txt", burst_properties, fmt=['%.8f', '%8f', '%.8f', '%.8f', '%.4e', '%.4e','%s'], delimiter='\t')
 
 
 
