@@ -137,6 +137,11 @@ def load_psrchive(fname, nchan, dm):
     return waterfall, f_channels, t_res, weights
 
 
+
+
+
+
+
 def process_files(files, nchan, dm, output_prefix):
     results_summary = []
     gaussian_mjd_list = []  # Store the MJD for each Gaussian component for each burst
@@ -171,8 +176,18 @@ def process_files(files, nchan, dm, output_prefix):
         time_series = np.average(waterfall_reduced[~np.isnan(waterfall_reduced[:, 0])], axis=0)
         time = np.arange(waterfall_reduced.shape[1])
 
+        # Define the zoom window around the center of the time axis
+        zoom_width = 200  # Define how many samples to zoom around the center (fixed range)
+        center_time_index = len(time) // 2  # Find the center of the time axis
+        zoom_start = max(0, center_time_index - zoom_width)
+        zoom_end = min(len(time), center_time_index + zoom_width)
+
+        # Only apply Gaussian fitting to the zoomed portion
+        zoomed_time_series = time_series[zoom_start:zoom_end]
+        zoomed_time = time[zoom_start:zoom_end]
+
         try:
-            results = iterative_gaussian_fitting(time_series, time, sn_threshold=np.std(time_series[0:50] * 3))
+            results = iterative_gaussian_fitting(zoomed_time_series, zoomed_time, sn_threshold=np.std(zoomed_time_series[0:50] * 3))
         except Exception as e:
             print(f"Error fitting Gaussian model for {filename}: {e}")
             error_log.write(f"{filename}: Gaussian fitting failed - {e}\n")  # Log the skipped file
@@ -223,25 +238,19 @@ def process_files(files, nchan, dm, output_prefix):
         peak_flux = np.max(multi_gaussian(time, *results["fitted_params"])) if results["fitted_params"] else np.nan
 
         # Append results for saving
-        results_summary.append([burst_mjd_val, peak_flux, burst_width, burst_width_uncertainty, energy, energy_uncertainty,burst_code])
+        results_summary.append([burst_mjd_val, peak_flux, fluence, burst_width, energy, burst_code])
 
         # Save the dynamic spectrum
         np.savez(f"{output_prefix}_{burst_code}.npz", dynamic_spectrum=waterfall_reduced, f_channels=f_channels_reduced, t_res=t_res_reduced)
-
-        # Define the zoom window around the center of the time axis
-        zoom_width = 200  # Define how many samples to zoom around the center (fixed range)
-        center_time_index = len(time) // 2  # Find the center of the time axis
-        zoom_start = max(0, center_time_index - zoom_width)
-        zoom_end = min(len(time), center_time_index + zoom_width)
 
         # Generate and save the plot
         fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(9, 7), gridspec_kw={'height_ratios': [1, 3]})
 
         # Time series plot (zoomed in)
-        ax1.plot(time[zoom_start:zoom_end], time_series[zoom_start:zoom_end], color='black', label='Time Series')
+        ax1.plot(zoomed_time, zoomed_time_series, color='black', label='Time Series')
 
         if results["fitted_params"]:
-            ax1.plot(time[zoom_start:zoom_end], multi_gaussian(time[zoom_start:zoom_end], *results["fitted_params"]), color='red', label='Gaussian Fit')
+            ax1.plot(zoomed_time, multi_gaussian(zoomed_time, *results["fitted_params"]), color='red', label='Gaussian Fit')
             if leftmost_intercept is not None and rightmost_intercept is not None:
                 ax1.axvline(leftmost_intercept, color='red', linestyle='dotted')
                 ax1.axvline(rightmost_intercept, color='red', linestyle='dotted')
@@ -287,7 +296,7 @@ def process_files(files, nchan, dm, output_prefix):
 
     # Save burst properties to a text file (with NaNs where calculations failed)
     burst_properties = np.array(results_summary, dtype=float)  # Ensure all elements are numeric (float)
-    np.savetxt(f"{output_prefix}_burst_properties.txt", burst_properties, fmt=['%.8f', '%8f', '%.8f', '%.8f', '%.4e', '%.4e','%s'], delimiter='\t')
+    np.savetxt(f"{output_prefix}_burst_properties.txt", burst_properties, fmt=['%.8f', '%4f','%.8f', '%.4f', '%.4e', '%s'], delimiter='\t')
 
 
 
@@ -301,4 +310,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     process_files(args.files, args.nchan, args.dm, args.output_prefix)
+
 
