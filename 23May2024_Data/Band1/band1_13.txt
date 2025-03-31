@@ -1,0 +1,5 @@
+cfbf00000	5	60453.243175675205	549.5	11.78	28.3	1373	1940	./Band1_Search/FRB_30min_13/_60453.2431646767_cfbf00000_01_01.png	1	/beegfsEDD/EDD_pipeline_data/production/pipeline_data/search1/69-24/FRB20240114A_20240523-05:47:42.fits
+cfbf00000	20	60453.24687681299	549.5	6.66	10.8	1355	1830	./Band1_Search/FRB_30min_13/_60453.2468681434_cfbf00000_01_01.png	1	/beegfsEDD/EDD_pipeline_data/production/pipeline_data/search1/69-24/FRB20240114A_20240523-05:47:42.fits
+cfbf00000	25	60453.24829043077	534.0	14.34	13.5	1355	1940	./Band1_Search/FRB_30min_13/_60453.2482800900_cfbf00000_01_01.png	1	/beegfsEDD/EDD_pipeline_data/production/pipeline_data/search1/69-24/FRB20240114A_20240523-05:47:42.fits
+cfbf00000	27	60453.24864909151	537.0	4.61	11.4	1318	1940	./Band1_Search/FRB_30min_13/_60453.2486388634_cfbf00000_01_01.png	1	/beegfsEDD/EDD_pipeline_data/production/pipeline_data/search1/69-24/FRB20240114A_20240523-05:47:42.fits
+cfbf00000	31	60453.250276131505	534.0	4.1	12.9	1373	1940	./Band1_Search/FRB_30min_13/_60453.2502707034_cfbf00000_01_01.png	1	/beegfsEDD/EDD_pipeline_data/production/pipeline_data/search1/69-24/FRB20240114A_20240523-05:47:42.fits
