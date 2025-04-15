@@ -319,8 +319,6 @@ def process_files(files, nchan, dm, output_prefix):
         upper_bound_freq = filtered_freqs[drop_index]
         bandwidth = upper_bound_freq - lower_bound_freq
 
-        fluence = fluence / (np.sqrt(bandwidth/BW))
-        energy = energy*(bandwidth/BW)
 
         results_summary.append([burst_mjd_val, peak_flux, fluence, burst_width, energy, lower_bound_freq, upper_bound_freq, bandwidth, burst_code,])
         
