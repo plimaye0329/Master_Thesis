@@ -335,7 +335,7 @@ def process_files(files, nchan, dm, output_prefix):
         plt.grid(True)
         plt.legend()
         plt.show()
-        plt.savefig('cdf_response.png',dpi=300,bbox_inches='tight')
+        #plt.savefig('cdf_response.png',dpi=300,bbox_inches='tight')
 
 # Step 8: Print calculated bandwidth
         print(f"Lower Bound Frequency (Significant Rise): {lower_bound_freq:.3f} MHz")
