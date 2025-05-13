@@ -283,44 +283,10 @@ def process_files(files, nchan, dm, output_prefix):
 
 
 
-        # Step 1: Interpolate over NaN values to handle misleading flat regions
-        # Step 1: Interpolate over NaN values to handle misleading flat regions
-        nan_mask = np.isnan(filtered_response)
-        valid_indices = np.where(~nan_mask)[0]
-        filtered_response[nan_mask] = np.interp(np.flatnonzero(nan_mask), valid_indices, filtered_response[valid_indices])
-
-# Step 2: Calculate the Cumulative Distribution Function (CDF)
-        cumulative_response = np.cumsum(filtered_response)
-        cumulative_response /= cumulative_response[-1]  # Normalize the CDF to [0, 1]
-        cumulative_response = gaussian_filter1d(cumulative_response, sigma=5)  # Gaussian 1D smoothing
-
-# Step 3: Compute the first derivative of the CDF to detect rises and flattening
-        cdf_derivative = np.gradient(cumulative_response, filtered_freqs)
-
-# Step 4 (Modified): Identify frequency indices where CDF equals 0.5
-        cdf_midpoint_index = np.argmin(np.abs(cumulative_response - 0.5))
-
-# Determine lower bound
-        lower_region = cdf_derivative[:cdf_midpoint_index]
-        if np.all(lower_region > 0):
-            rise_index = 0  # Set to minimum frequency if always increasing
-        else:
-            rise_index = np.where(lower_region <= 0)[0][-1] + 1  # Last point before non-positive slope
-
-# Determine upper bound
-        upper_region = cdf_derivative[cdf_midpoint_index:]
-        if np.all(upper_region > 0):
-            drop_index = len(filtered_freqs) - 1  # Set to max frequency if always increasing
-        else:
-            drop_index = np.where(upper_region <= 0)[0][0] + cdf_midpoint_index  # First point where slope stops increasing
-
-# Step 6: Calculate the frequency bounds and bandwidth
-        lower_bound_freq = filtered_freqs[rise_index]
-        upper_bound_freq = filtered_freqs[drop_index]
-        bandwidth = upper_bound_freq - lower_bound_freq
+       
 
 
-        results_summary.append([burst_mjd_val, peak_flux, fluence, burst_width, energy, lower_bound_freq, upper_bound_freq, bandwidth, burst_code,])
+        results_summary.append([burst_mjd_val, peak_flux, fluence, burst_width, burst_code])
         
 
 
@@ -401,8 +367,8 @@ def process_files(files, nchan, dm, output_prefix):
 
     # Save burst properties to a text file (with NaNs where calculations failed)
     burst_properties = np.array(results_summary, dtype=float)  # Ensure all elements are numeric (float)
-    header = 'Burst_MJD\tPeak_Flux(mJy)\tFluence(Jy-s)\tWidth(ms)\tEnergy(ergs)\tLower_Frequency(MHz)\tUpper_Frequency(MHz)\tOverall_Bandwidth(MHz)\tBurst_Code'
-    np.savetxt(f"{output_prefix}_burst_properties.txt", burst_properties, fmt=['%.8f', '%4f','%.8f', '%.4f','%.4e', '%.4f', '%.4f','%.4f', '%s'], header=header, delimiter='\t')
+    header = 'Burst_MJD\tPeak_Flux(mJy)\tFluence(Jy-s)\tWidth(ms)\tBurst_Code'
+    np.savetxt(f"{output_prefix}_burst_properties.txt", burst_properties, fmt=['%.8f', '%4f','%.8f', '%.4f','%s'], header=header, delimiter='\t')
 
 
 
