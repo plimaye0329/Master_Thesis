@@ -290,23 +290,11 @@ def process_files(files, nchan, dm, output_prefix):
         
 
 
-# Step 7: Plot the CDF with the updated bounds
-        plt.figure(figsize=(10, 6))
-        plt.plot(filtered_freqs, cumulative_response, label='CDF of Intensity Response', color='b')
-        plt.axvline(lower_bound_freq, color='r', linestyle='--', label=f'Lower Bound: {lower_bound_freq:.3f} MHz (Rise)')
-        plt.axvline(upper_bound_freq, color='g', linestyle='--', label=f'Upper Bound: {upper_bound_freq:.3f} MHz (Drop/Flat)')
-        plt.xlabel('Frequency (MHz)')
-        plt.ylabel('Normalized Cumulative Intensity')
-        #plt.title('CDF of Burst Intensity with Corrected Bandwidth Markers')
-        plt.grid(True)
-        plt.legend()
-        plt.show()
+
         #plt.savefig('cdf_response.png',dpi=300,bbox_inches='tight')
 
 # Step 8: Print calculated bandwidth
-        print(f"Lower Bound Frequency (Significant Rise): {lower_bound_freq:.3f} MHz")
-        print(f"Upper Bound Frequency (Significant Drop/Flat): {upper_bound_freq:.3f} MHz")
-        print(f"Estimated Burst Bandwidth: {bandwidth:.3f} MHz")
+
 
 
 
