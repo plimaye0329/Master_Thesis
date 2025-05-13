@@ -1,6 +1,6 @@
 import os
 from scipy.ndimage import gaussian_filter1d
-from kneed import KneeLocator
+#from kneed import KneeLocator
 import sys
 from scipy.interpolate import interp1d
 import psrchive
